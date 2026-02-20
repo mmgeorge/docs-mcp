@@ -3,4 +3,65 @@ name = "docs-mcp"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "docs-mcp"
+path = "src/main.rs"
+
+[lib]
+name = "docs_mcp"
+path = "src/lib.rs"
+
 [dependencies]
+# MCP server
+rmcp = { version = "0.16", features = ["server", "macros", "transport-io", "schemars"] }
+
+# Async runtime
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "fs"] }
+
+# HTTP + middleware
+reqwest = { version = "0.12", features = ["json", "stream", "gzip", "brotli"] }
+reqwest-middleware = "0.4"
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# HTTP extensions (needed for reqwest-middleware Middleware impl)
+http = "1"
+
+# Rate limiting (1 req/s to crates.io)
+governor = "0.8"
+nonzero_ext = "0.3"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Semver parsing
+semver = { version = "1", features = ["serde"] }
+
+# Dates in crates.io API responses
+chrono = { version = "0.4", features = ["serde"] }
+
+# Platform-appropriate cache directory
+directories = "5"
+
+# Hashing for cache keys
+sha2 = "0.10"
+hex = "0.4"
+
+# Regex for feature flag extraction
+regex = "1"
+
+# Zstd decompression (docs.rs serves rustdoc JSON as .json.zst files)
+zstd = "0.13"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "fs", "time"] }
+regex = "1"
+rmcp = { version = "0.16", features = ["server", "client", "macros", "transport-io", "schemars"] }
