@@ -1,6 +1,6 @@
 # docs-mcp
 
-An [MCP](https://modelcontextprotocol.io/) server for accessing the Rust crate ecosystem. Combines the crates.io API, sparse index, and rustdoc JSON from docs.rs.
+An [MCP](https://modelcontextprotocol.io/) server for accessing documentation for Rust crates. Does *not* require nightly or downloading crates. Instead uses the rustdoc JSON published on docs.rs. Also expose some additional API calls from crates.io and the crates.io sparse index.
 
 ## Quick Start
 
