@@ -20,8 +20,9 @@ pub struct CrateItemGetParams {
     pub item_path: String,
     /// Include inherent methods from impl blocks (default: true)
     pub include_methods: Option<bool>,
-    /// Include list of trait implementations (default: true)
-    pub include_trait_impls: Option<bool>,
+    /// Trait impl filtering mode: "filtered" (default) omits ubiquitous blankets like
+    /// Borrow/Into/From<T>/Any; "all" returns everything; "none" omits trait impls entirely.
+    pub include_trait_impls: Option<String>,
 }
 
 pub async fn execute(state: &AppState, params: CrateItemGetParams) -> Result<CallToolResult, ErrorData> {
@@ -30,7 +31,7 @@ pub async fn execute(state: &AppState, params: CrateItemGetParams) -> Result<Cal
         .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
     let include_methods = params.include_methods.unwrap_or(true);
-    let include_trait_impls = params.include_trait_impls.unwrap_or(true);
+    let trait_impl_mode = params.include_trait_impls.as_deref().unwrap_or("filtered");
 
     let (docs_result, index_result) = tokio::join!(
         fetch_rustdoc_json(name, &version, &state.client, &state.cache),
@@ -76,10 +77,40 @@ pub async fn execute(state: &AppState, params: CrateItemGetParams) -> Result<Cal
         .map(|(id, _)| id.clone());
 
     let item_id = item_id.ok_or_else(|| {
-        ErrorData::invalid_params(
-            format!("Item '{}' not found in {name} {version}", target_path),
-            None,
-        )
+        // Item not found in doc.paths — check if it's a re-export "use" item in doc.index
+        // that points to an external crate (common with facade crates: serde, futures, clap).
+        let last_component = target_path.split("::").last().unwrap_or(target_path.as_str());
+        let re_export_sources: Vec<String> = doc.index.iter()
+            .filter(|(id, item)| {
+                !doc.paths.contains_key(*id)
+                    && item.name.as_deref() == Some(last_component)
+                    && item.kind() == Some("use")
+            })
+            .filter_map(|(_, item)| {
+                item.inner_for("use")
+                    .and_then(|u| u.get("source"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .take(3)
+            .collect();
+
+        if !re_export_sources.is_empty() {
+            let sources = re_export_sources.join(", ");
+            ErrorData::invalid_params(
+                format!("Item '{target_path}' is re-exported in {name} {version} from an \
+                         external crate ({sources}). Its full definition is not in the {name} docs. \
+                         Look it up in the crate that defines it using crate_item_get."),
+                None,
+            )
+        } else {
+            ErrorData::invalid_params(
+                format!("Item '{target_path}' not found in {name} {version}. \
+                         Use crate_item_list(name=\"{name}\", query=\"{last_component}\") \
+                         to search for available items and discover the correct path."),
+                None,
+            )
+        }
     })?;
 
     let item = doc.index.get(&item_id).ok_or_else(|| {
@@ -88,7 +119,7 @@ pub async fn execute(state: &AppState, params: CrateItemGetParams) -> Result<Cal
         // The path is known but the item body was compiled into a different crate's docs.
         let path_entry = doc.paths.get(&item_id);
         let hint = path_entry.map(|p| p.full_path()).unwrap_or_default();
-        ErrorData::internal_error(
+        ErrorData::invalid_params(
             format!("Item '{hint}' is re-exported from an external crate and its full definition \
                      is not available in the {name} docs. Try looking it up directly in the \
                      crate that defines it."),
@@ -126,10 +157,10 @@ pub async fn execute(state: &AppState, params: CrateItemGetParams) -> Result<Cal
     };
 
     // Trait impls
-    let trait_impls: Vec<serde_json::Value> = if include_trait_impls {
-        collect_trait_impls(&doc, item)
-    } else {
-        vec![]
+    let trait_impls: Vec<serde_json::Value> = match trait_impl_mode {
+        "none" => vec![],
+        "all"  => collect_trait_impls(&doc, item, false),
+        _      => collect_trait_impls(&doc, item, true),  // "filtered" default
     };
 
     let output = json!({
@@ -235,9 +266,51 @@ fn collect_methods(
     methods
 }
 
+/// Trait names that are ubiquitous blanket impls present on virtually every type.
+/// These add no useful information and are filtered by default.
+const UBIQUITOUS_TRAITS: &[&str] = &[
+    "Any",
+    "Freeze",
+    "Instrument",
+    "RefUnwindSafe",
+    "UnwindSafe",
+    "WithSubscriber",
+];
+
+/// Returns true if this trait path is a pure blanket impl that should be hidden.
+/// Catches two categories:
+/// 1. Names in UBIQUITOUS_TRAITS regardless of generic args.
+/// 2. Traits whose only generic arg is a single uppercase letter (e.g. `From<T>`,
+///    `Into<U>`, `Borrow<T>`) — these are identity/conversion blankets that apply
+///    to every type. Concrete impls like `From<io::Error>` are kept.
+fn is_ubiquitous_blanket(trait_path: &str) -> bool {
+    // Strip module prefix to get bare name + optional args, e.g. "std::From<T>" → "From<T>"
+    let bare = trait_path.rsplit("::").next().unwrap_or(trait_path);
+    let name = bare.split('<').next().unwrap_or(bare).trim();
+
+    if UBIQUITOUS_TRAITS.contains(&name) {
+        return true;
+    }
+
+    // Check for single-letter generic arg: From<T>, Into<U>, Borrow<T>, etc.
+    if let Some(args) = bare.strip_prefix(name).and_then(|s| s.strip_prefix('<')).and_then(|s| s.strip_suffix('>')) {
+        let arg = args.trim();
+        if arg.len() == 1 && arg.chars().next().map_or(false, |c| c.is_uppercase()) {
+            return true;
+        }
+        // Also catch "never" and "!" which are infallible blanket sentinels
+        if arg == "never" || arg == "!" {
+            return true;
+        }
+    }
+
+    false
+}
+
 fn collect_trait_impls(
     doc: &crate::docsrs::RustdocJson,
     item: &crate::docsrs::Item,
+    filter_ubiquitous: bool,
 ) -> Vec<serde_json::Value> {
     let mut impls = vec![];
     for impl_id in get_impl_ids(item) {
@@ -253,6 +326,9 @@ fn collect_trait_impls(
         // In v57, trait is a direct path object: {"path": "Send", "id": N, "args": ...}
         // Use type_to_string to include generic args (e.g. "From<io::Error>" not just "From")
         let trait_path = type_to_string(trait_);
+        if filter_ubiquitous && is_ubiquitous_blanket(&trait_path) {
+            continue;
+        }
         impls.push(json!({ "trait_path": trait_path }));
     }
     impls
@@ -330,7 +406,7 @@ mod tests {
     fn collect_trait_impls_excludes_synthetic_and_includes_real_traits() {
         let doc = load_rmcp();
         let item = doc.index.get("9410").expect("TokioChildProcess must exist");
-        let impls = collect_trait_impls(&doc, item);
+        let impls = collect_trait_impls(&doc, item, true);
         assert!(!impls.is_empty(), "TokioChildProcess should have non-synthetic trait impls");
 
         let trait_names: Vec<&str> = impls.iter()
@@ -341,16 +417,20 @@ mod tests {
         assert!(!trait_names.contains(&"Send"), "synthetic Send should be filtered: {trait_names:?}");
         assert!(!trait_names.contains(&"Sync"), "synthetic Sync should be filtered: {trait_names:?}");
 
-        // Standard non-synthetic blanket impls should be present
-        assert!(trait_names.contains(&"From<T>") || trait_names.contains(&"Borrow<T>"),
-            "should include standard non-synthetic trait impls, got: {trait_names:?}");
+        // Ubiquitous blanket impls should now also be filtered
+        assert!(!trait_names.contains(&"From<T>"), "From<T> blanket should be filtered: {trait_names:?}");
+        assert!(!trait_names.contains(&"Borrow<T>"), "Borrow<T> blanket should be filtered: {trait_names:?}");
+        assert!(!trait_names.contains(&"Into<U>"), "Into<U> blanket should be filtered: {trait_names:?}");
+        assert!(!trait_names.iter().any(|t| *t == "Any"), "Any should be filtered: {trait_names:?}");
+        // Meaningful crate-specific trait impls should remain
+        assert!(!impls.is_empty(), "TokioChildProcess should still have meaningful trait impls after filtering");
     }
 
     #[test]
     fn collect_trait_impls_entries_have_trait_path_field() {
         let doc = load_rmcp();
         let item = doc.index.get("9410").expect("TokioChildProcess must exist");
-        let impls = collect_trait_impls(&doc, item);
+        let impls = collect_trait_impls(&doc, item, true);
         for impl_entry in &impls {
             assert!(impl_entry.get("trait_path").is_some(), "each entry must have trait_path field");
             let tp = impl_entry.get("trait_path").and_then(|v| v.as_str()).unwrap_or("");
@@ -364,7 +444,7 @@ mod tests {
         let doc = load_rmcp();
         let item = doc.index.get("9410").expect("TokioChildProcess must exist");
         // inherent impls have no trait; collect_trait_impls must not include them
-        let trait_impls = collect_trait_impls(&doc, item);
+        let trait_impls = collect_trait_impls(&doc, item, true);
         let methods = collect_methods(&doc, item, &HashSet::new());
         // The 6 inherent methods should NOT appear in trait_impls
         let trait_names: Vec<&str> = trait_impls.iter()

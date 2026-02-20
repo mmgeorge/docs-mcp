@@ -59,6 +59,8 @@ async fn cratesio_versions_list_serde_returns_stable_versions() {
         include_yanked: Some(false),
         include_prerelease: Some(false),
         search: None,
+        page: None,
+        per_page: None,
     };
     let result = crate_versions_list::execute(&state, params).await
         .expect("crate_versions_list should succeed");

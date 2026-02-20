@@ -58,7 +58,7 @@ impl DocsMcpServer {
         crate_get::execute(&self.state, params).await
     }
 
-    #[tool(description = "Fetch the crate's README for a specific version as readable text. Contains the author's intended narrative: why the crate exists, how it compares to alternatives, installation instructions, and quick-start examples.")]
+    #[tool(description = "Fetch the crate's README for a specific version as readable text. Contains the author's intended narrative: why the crate exists, how it compares to alternatives, installation instructions, and quick-start examples. Prefer crate_docs_get when you want structured docs plus a module tree; use this tool when you want the raw README prose.")]
     async fn crate_readme_get(
         &self,
         Parameters(params): Parameters<CrateReadmeGetParams>,
@@ -66,7 +66,7 @@ impl DocsMcpServer {
         crate_readme_get::execute(&self.state, params).await
     }
 
-    #[tool(description = "Get high-level documentation structure from rustdoc JSON: the crate-level //! documentation (architecture overview, feature table, usage examples), module tree, and per-module item summaries. Primary entry point for understanding a library you're already using.")]
+    #[tool(description = "Get high-level documentation structure from rustdoc JSON: the crate-level //! documentation (architecture overview, feature table, usage examples), module tree, and per-module item summaries. Falls back to README when docs.rs has no build yet. Primary entry point for understanding a library you're already using. Use crate_readme_get instead only when you specifically want the raw README prose.")]
     async fn crate_docs_get(
         &self,
         Parameters(params): Parameters<CrateDocsGetParams>,
@@ -74,7 +74,7 @@ impl DocsMcpServer {
         crate_docs_get::execute(&self.state, params).await
     }
 
-    #[tool(description = "Search for items (types, functions, traits, etc.) within a crate's API by name or concept. Returns ranked results with signatures and doc summaries. Use after crate_docs_get to find specific items without browsing the module tree.")]
+    #[tool(description = "Search for items (types, functions, traits, methods, etc.) within a crate's API by name or concept. Returns ranked results with signatures and doc summaries. Use kind='method' to search inherent methods on types. Use after crate_docs_get to find specific items without browsing the module tree. Use crate_item_get once you know the exact fully-qualified path of the item you want.")]
     async fn crate_item_list(
         &self,
         Parameters(params): Parameters<CrateItemListParams>,
@@ -82,7 +82,7 @@ impl DocsMcpServer {
         crate_item_list::execute(&self.state, params).await
     }
 
-    #[tool(description = "Get complete documentation for a specific item by fully-qualified path. Returns the full doc comment, exact type signature, generic parameters, where clauses, inherent methods, implemented traits, and feature flags. Primary API reference tool.")]
+    #[tool(description = "Get complete documentation for a specific item by fully-qualified path. Returns the full doc comment, exact type signature, generic parameters, where clauses, inherent methods, implemented traits, and feature flags. Primary API reference tool. Requires knowing the exact path — use crate_item_list first to search if you don't have it.")]
     async fn crate_item_get(
         &self,
         Parameters(params): Parameters<CrateItemGetParams>,
@@ -90,7 +90,7 @@ impl DocsMcpServer {
         crate_item_get::execute(&self.state, params).await
     }
 
-    #[tool(description = "Find implementors of a trait, or all traits implemented by a type. Answers: 'what do I need to implement to use this abstraction?' and 'what can I call on this type?' Specify either trait_path or type_path.")]
+    #[tool(description = "Find implementors of a trait, or all traits implemented by a type. Answers: 'what do I need to implement to use this abstraction?' and 'what can I call on this type?' Requires either trait_path (e.g. 'Default') to find types implementing that trait, or type_path (e.g. 'MyStruct') to find all traits a type implements. Use crate_item_list to discover valid type/trait names first.")]
     async fn crate_impls_list(
         &self,
         Parameters(params): Parameters<CrateImplsListParams>,
@@ -114,7 +114,7 @@ impl DocsMcpServer {
         crate_version_get::execute(&self.state, params).await
     }
 
-    #[tool(description = "Get the dependency list for a specific crate version with semver requirements, optional flags, enabled features, and target conditions. Use for due diligence: a large or unusual dependency tree is a risk multiplier.")]
+    #[tool(description = "Get the dependency list for a crate version with semver requirements, optional flags, enabled features, and target conditions. Version defaults to latest stable. Use for due diligence: a large or unusual dependency tree is a risk multiplier.")]
     async fn crate_dependencies_list(
         &self,
         Parameters(params): Parameters<CrateDependenciesListParams>,
@@ -161,6 +161,13 @@ impl ServerHandler for DocsMcpServer {
                 DISCOVERY WORKFLOW: crate_list → crate_get → crate_readme_get\n\
                 UNDERSTANDING WORKFLOW: crate_docs_get → crate_item_list → crate_item_get → crate_impls_list\n\
                 DUE DILIGENCE: crate_versions_list → crate_downloads_get → crate_dependents_list → crate_dependencies_list\n\
+                \n\
+                Tool selection guide:\n\
+                - crate_docs_get: structured docs + module tree (falls back to README if no docs.rs build)\n\
+                - crate_readme_get: raw README prose only\n\
+                - crate_item_list: search items by name/concept when you don't have the exact path\n\
+                - crate_item_get: full item details when you have the exact fully-qualified path\n\
+                - crate_impls_list: requires trait_path OR type_path (use crate_item_list to find names)\n\
                 \n\
                 All tools default to the latest stable version when version is not specified.".to_string()
             ),

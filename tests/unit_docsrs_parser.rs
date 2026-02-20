@@ -846,4 +846,80 @@ fn fixture_rmcp_struct_with_lifetime_includes_lifetime_in_generics() {
     assert!(generics.contains('S'), "PromptContext generics must include type param S, got: {generics}");
 }
 
+// ─── method search tests ─────────────────────────────────────────────────────
+
+#[test]
+fn search_methods_finds_inherent_methods_without_kind_filter() {
+    // TokioChildProcess has 6 inherent methods (new, builder, id, graceful_shutdown, into_inner, split)
+    // These are NOT in doc.paths, so only the method search pass finds them.
+    let doc = load_rmcp();
+    let features = HashSet::new();
+    // Search by type name — the method pass should match methods whose parent path contains the query.
+    let results = search_items(&doc, "TokioChildProcess", None, None, 50, &features);
+    let method_results: Vec<_> = results.iter().filter(|r| r.kind == "method").collect();
+    assert!(!method_results.is_empty(), "search for 'TokioChildProcess' with no kind filter should find methods");
+    let paths: Vec<&str> = method_results.iter().map(|r| r.path.as_str()).collect();
+    // All method results should be on TokioChildProcess
+    assert!(
+        paths.iter().all(|p| p.contains("TokioChildProcess")),
+        "all method results should be on TokioChildProcess, got: {paths:?}"
+    );
+    // Its ::new method should be present
+    assert!(
+        paths.iter().any(|p| p.ends_with("::new")),
+        "TokioChildProcess::new should appear as a method result, got: {paths:?}"
+    );
+}
+
+#[test]
+fn search_methods_kind_method_filter_returns_only_methods() {
+    let doc = load_rmcp();
+    let features = HashSet::new();
+    let results = search_items(&doc, "", Some("method"), None, 50, &features);
+    assert!(!results.is_empty(), "kind=method should return results");
+    for r in &results {
+        assert_eq!(r.kind, "method", "kind=method must only return methods, got: {}", r.kind);
+    }
+}
+
+#[test]
+fn search_methods_kind_fn_excludes_methods() {
+    // kind="fn" should only return free functions, NOT inherent methods
+    let doc = load_rmcp();
+    let features = HashSet::new();
+    let results = search_items(&doc, "", Some("fn"), None, 200, &features);
+    for r in &results {
+        assert_ne!(r.kind, "method", "kind=fn must not return methods, got method: {}", r.path);
+    }
+}
+
+#[test]
+fn search_methods_path_includes_parent_type() {
+    // Method paths should be "ParentType::method_name"
+    let doc = load_rmcp();
+    let features = HashSet::new();
+    let results = search_items(&doc, "", Some("method"), None, 50, &features);
+    for r in &results {
+        assert!(
+            r.path.contains("::"),
+            "method path must contain '::' (ParentType::method), got: {}",
+            r.path
+        );
+    }
+}
+
+#[test]
+fn search_methods_signature_contains_fn_keyword() {
+    let doc = load_rmcp();
+    let features = HashSet::new();
+    let results = search_items(&doc, "new", Some("method"), None, 20, &features);
+    for r in &results {
+        assert!(
+            r.signature.contains("fn "),
+            "method signature must contain 'fn ', got: {}",
+            r.signature
+        );
+    }
+}
+
 // ─── html_to_text entity decoding ────────────────────────────────────────────

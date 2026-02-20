@@ -559,6 +559,65 @@ fn build_children(item_ids: &[Value], doc: &RustdocJson, depth: usize) -> Vec<Mo
     modules
 }
 
+// ─── Method parent map ───────────────────────────────────────────────────────
+
+/// Returns the item ID embedded in a rustdoc JSON type node (`resolved_path` or direct id+path).
+fn type_item_id(val: &Value) -> Option<String> {
+    if let Some(rp) = val.get("resolved_path") {
+        return match rp.get("id") {
+            Some(Value::Number(n)) => Some(n.to_string()),
+            Some(Value::String(s)) => Some(s.clone()),
+            _ => None,
+        };
+    }
+    match (val.get("id"), val.get("path")) {
+        (Some(Value::Number(n)), Some(_)) => Some(n.to_string()),
+        (Some(Value::String(s)), Some(_)) => Some(s.clone()),
+        _ => None,
+    }
+}
+
+/// Build a map from method/associated item ID → parent type's full qualified path.
+///
+/// Covers inherent impl blocks. Trait-impl method IDs are intentionally excluded
+/// because they are covered by looking up the implementing type directly.
+fn build_method_parent_map(doc: &RustdocJson) -> HashMap<String, String> {
+    let mut map: HashMap<String, String> = HashMap::new();
+
+    for item in doc.index.values() {
+        if item.kind() != Some("impl") { continue; }
+        let Some(impl_inner) = item.inner_for("impl") else { continue };
+
+        // Inherent impls only (trait field is null/absent)
+        let trait_is_null = impl_inner.get("trait").map(|t| t.is_null()).unwrap_or(true);
+        if !trait_is_null { continue; }
+
+        let Some(for_val) = impl_inner.get("for") else { continue };
+
+        // Resolve the parent type path: try doc.paths first (gives full qualified path),
+        // fall back to type_to_string (gives just the type name).
+        let parent_path = type_item_id(for_val)
+            .and_then(|id| doc.paths.get(&id))
+            .map(|p| p.full_path())
+            .unwrap_or_else(|| type_to_string(for_val));
+
+        if parent_path.is_empty() { continue; }
+
+        let method_ids = impl_inner.get("items")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        for method_id_val in &method_ids {
+            if let Some(mid) = id_val_to_string(method_id_val) {
+                map.insert(mid, parent_path.clone());
+            }
+        }
+    }
+
+    map
+}
+
 // ─── Item search ──────────────────────────────────────────────────────────────
 
 pub struct SearchResult {
@@ -629,7 +688,7 @@ pub fn search_items(
         } else if name_lower.contains(&query_lower) {
             0.7
         } else if doc_lower.contains(&query_lower) {
-            0.4
+            0.2
         } else {
             continue; // no match
         };
@@ -649,6 +708,61 @@ pub fn search_items(
             feature_requirements,
             score,
         });
+    }
+
+    // Second pass: search methods (function items in doc.index but absent from doc.paths).
+    // These are inherent methods on structs/enums, not top-level free functions.
+    // kind="fn"/"function" specifically targets free functions; methods have kind="method".
+    let want_methods = kind_filter.is_none() || kind_filter == Some("method");
+
+    if want_methods {
+        let method_parent_map = build_method_parent_map(doc);
+
+        for (id, item) in &doc.index {
+            if doc.paths.contains_key(id) { continue; } // already searched above
+            if item.kind() != Some("function") { continue; }
+
+            let Some(parent_path) = method_parent_map.get(id) else { continue };
+            let name = item.name.as_deref().unwrap_or("");
+            if name.is_empty() { continue; }
+
+            // Module prefix filter: parent type path must start with the prefix
+            if let Some(prefix) = module_prefix {
+                if !parent_path.starts_with(prefix) { continue; }
+            }
+
+            let name_lower = name.to_lowercase();
+            let parent_lower = parent_path.to_lowercase();
+            let doc_summary = item.doc_summary();
+            let doc_lower = doc_summary.to_lowercase();
+
+            let score = if name_lower == query_lower {
+                1.0f32
+            } else if name_lower.starts_with(&query_lower) {
+                0.9
+            } else if name_lower.contains(&query_lower) {
+                0.7
+            } else if parent_lower.contains(&query_lower) {
+                0.6 // query matches parent type name, e.g. "TokioChildProcess" → all its methods
+            } else if doc_lower.contains(&query_lower) {
+                0.4
+            } else {
+                continue;
+            };
+
+            let full_path = format!("{parent_path}::{name}");
+            let signature = function_signature(item);
+            let feature_requirements = extract_feature_requirements(&item.attr_strings(), declared_features);
+
+            results.push(SearchResult {
+                path: full_path,
+                kind: "method".to_string(),
+                signature,
+                doc_summary,
+                feature_requirements,
+                score,
+            });
+        }
     }
 
     // Sort by score descending

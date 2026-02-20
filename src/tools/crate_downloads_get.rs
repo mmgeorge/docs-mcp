@@ -36,12 +36,12 @@ pub async fn execute(state: &AppState, params: CrateDownloadsGetParams) -> Resul
     let mut total_90d: u64 = 0;
     let mut versions_breakdown: HashMap<&str, u64> = HashMap::new();
 
-    // Determine 30d cutoff (rough: just first 30 lines if sorted, or use dates)
-    // We'll compute from dates if available
-    let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-    let cutoff_30 = params.before_date.as_deref()
-        .map(|d| subtract_days(d, 30))
-        .unwrap_or_else(|| subtract_days(&today, 30));
+    // Resolve the effective upper-bound date (UTC today when not specified).
+    let today_utc = chrono::Utc::now().format("%Y-%m-%d").to_string();
+    let effective_before_date = params.before_date.as_deref()
+        .unwrap_or(&today_utc)
+        .to_string();
+    let cutoff_30 = subtract_days(&effective_before_date, 30);
 
     let items: Vec<serde_json::Value> = downloads.version_downloads.iter().map(|vd| {
         let ver = version_map.get(&vd.version).copied().unwrap_or("?");
@@ -63,7 +63,7 @@ pub async fn execute(state: &AppState, params: CrateDownloadsGetParams) -> Resul
 
     let output = json!({
         "name": name,
-        "before_date": params.before_date,
+        "before_date": effective_before_date,
         "total_30d": total_30d,
         "total_90d": total_90d,
         "versions_breakdown": breakdown_sorted.iter()

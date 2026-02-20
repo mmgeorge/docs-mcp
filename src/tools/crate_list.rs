@@ -1,9 +1,37 @@
 use rmcp::{ErrorData, model::CallToolResult};
 use rmcp::model::Content;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use rmcp::schemars::{self, JsonSchema};
 
+use crate::cratesio::CrateInfo;
 use super::AppState;
+
+#[derive(Serialize)]
+struct CrateListEntry<'a> {
+    name: &'a str,
+    description: Option<&'a str>,
+    version: Option<&'a str>,
+    newest_version: Option<&'a str>,
+    downloads: u64,
+    recent_downloads: Option<u64>,
+    updated_at: &'a str,
+    repository: Option<&'a str>,
+}
+
+impl<'a> From<&'a CrateInfo> for CrateListEntry<'a> {
+    fn from(c: &'a CrateInfo) -> Self {
+        Self {
+            name: &c.name,
+            description: c.description.as_deref(),
+            version: c.max_stable_version.as_deref().or(c.max_version.as_deref()),
+            newest_version: c.newest_version.as_deref(),
+            downloads: c.downloads,
+            recent_downloads: c.recent_downloads,
+            updated_at: &c.updated_at,
+            repository: c.repository.as_deref(),
+        }
+    }
+}
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct CrateListParams {
@@ -39,7 +67,9 @@ pub async fn execute(state: &AppState, params: CrateListParams) -> Result<CallTo
         .await
         .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
-    let json = serde_json::to_string_pretty(&result)
+    let entries: Vec<CrateListEntry> = result.crates.iter().map(CrateListEntry::from).collect();
+    let output = serde_json::json!({ "crates": entries, "total": result.meta.total });
+    let json = serde_json::to_string_pretty(&output)
         .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
     Ok(CallToolResult::success(vec![Content::text(json)]))

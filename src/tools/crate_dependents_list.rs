@@ -46,7 +46,6 @@ pub async fn execute(state: &AppState, params: CrateDependentsListParams) -> Res
         .map(|d| {
             let crate_name = version_map.get(&d.version_id).unwrap_or(&"?");
             json!({
-                "crate_id": d.crate_id,
                 "dependent_crate": crate_name,
                 "req": d.req,
                 "optional": d.optional,

@@ -25,7 +25,10 @@ pub struct CrateImplsListParams {
 pub async fn execute(state: &AppState, params: CrateImplsListParams) -> Result<CallToolResult, ErrorData> {
     if params.trait_path.is_none() && params.type_path.is_none() {
         return Err(ErrorData::invalid_params(
-            "Either trait_path or type_path must be specified",
+            "Either trait_path or type_path must be specified.\n\
+             - To find all types that implement a trait: trait_path=\"Default\"\n\
+             - To find all traits a specific type implements: type_path=\"MyStruct\"\n\
+             Use crate_item_list first to discover item names in the crate.",
             None,
         ));
     }
@@ -34,8 +37,18 @@ pub async fn execute(state: &AppState, params: CrateImplsListParams) -> Result<C
     let version = state.resolve_version(name, params.version.as_deref()).await
         .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
-    let doc = fetch_rustdoc_json(name, &version, &state.client, &state.cache).await
-        .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+    let doc = match fetch_rustdoc_json(name, &version, &state.client, &state.cache).await {
+        Ok(d) => d,
+        Err(crate::error::DocsError::DocsNotFound { .. }) => {
+            return Err(ErrorData::invalid_params(
+                format!("No docs.rs build found for {name} {version}. \
+                         The latest version may not have been built yet. \
+                         Try specifying an older version with the 'version' parameter."),
+                None,
+            ));
+        }
+        Err(e) => return Err(ErrorData::internal_error(e.to_string(), None)),
+    };
 
     let search_lower = params.search.as_deref().map(|s| s.to_lowercase());
     let limit = params.limit.unwrap_or(50).min(200);
