@@ -6,7 +6,7 @@ description = "MCP server using the crates.io API and docs.rs published rustdoc 
 license = "MIT"
 repository = "https://github.com/mmgeorge/docs-mcp"
 readme = "README.md"
-keywords = ["mcp", "rustdoc", "docs", "crates", "rust docs"]
+keywords = ["mcp", "rustdoc", "docs", "doc", "crates"]
 
 [[bin]]
 name = "docs-mcp"
