@@ -2,6 +2,8 @@
 name = "docs-mcp"
 version = "0.1.0"
 edition = "2024"
+description = "MCP server using the crates.io API and docs.rs published rustdoc JSON"
+license = "MIT"
 
 [[bin]]
 name = "docs-mcp"
