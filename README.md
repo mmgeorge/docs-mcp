@@ -1,5 +1,8 @@
 # docs-mcp
 
+[![Crates.io](https://img.shields.io/crates/v/docs-mcp)](https://crates.io/crates/docs-mcp)
+[![CI](https://github.com/mmgeorge/docs-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/mmgeorge/docs-mcp/actions/workflows/ci.yml)
+
 An [MCP](https://modelcontextprotocol.io/) server for accessing documentation for Rust crates. Does *not* require nightly or downloading crates. Instead uses the rustdoc JSON published on docs.rs. Also expose some additional API calls from crates.io and the crates.io sparse index.
 
 ## Quick Start
