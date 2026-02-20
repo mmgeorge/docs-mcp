@@ -1,6 +1,6 @@
 [package]
 name = "docs-mcp"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "MCP server using the crates.io API and docs.rs published rustdoc JSON"
 license = "MIT"
