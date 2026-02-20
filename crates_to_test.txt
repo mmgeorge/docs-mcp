@@ -1,0 +1,42 @@
+20 DIVERSE CRATES FOR SYSTEMATIC TESTING
+==========================================
+
+BRAND NEW (Feb 2026):
+1. llmfit (0.3.2) - LLM sizing tool
+2. mirage-proxy (0.5.9) - Sensitive data filter for LLM APIs
+3. octostore (0.8.0) - Distributed locking service
+4. a1800_codec (1.0.0) - Audio codec implementation
+5. tg-rcore-tutorial-ch2 (0.4.2-preview.10) - OS tutorial crate
+
+NEWER (2025-2024):
+6. aegisvault (0.4.3) - OTP URI to Aegis converter
+7. kero (1.0.0) - 2D game framework
+8. gtether (0.2.1) - Multiplayer game engine
+9. syncable-cli (0.35.0) - IaC generator
+10. why2 (1.4.11) - Encryption system
+
+ESTABLISHED (2023-2015):
+11. bevy_enhanced_input (0.24.0) - Bevy input manager
+12. virtual_joystick (2.6.0) - Bevy virtual joystick
+13. inferadb-ledger-types (0.1.0-dev) - Crypto types for ledger
+14. winit (0.30.12) - Window creation library
+15. smithay-client-toolkit (0.20.0) - Wayland toolkit
+16. wayland-client (0.31.12) - Wayland protocol bindings
+17. wayland-protocols (0.32.10) - Wayland protocol extensions
+18. cadence (1.7.0) - Statsd client (2015)
+19. abridge (1.1.6) - Word list compression (2021)
+20. accept-encoding (0.1.0) - HTTP Accept-Encoding parser (2018)
+
+TESTING STRATEGY
+================
+For each crate, test ALL these docs-mcp tools in order:
+1. crate_get - Basic metadata
+2. crate_docs_get - Documentation structure
+3. crate_readme_get - README content
+4. crate_item_list - Search items
+5. crate_item_get - Get specific item details
+6. crate_impls_list - Find trait implementations
+7. crate_versions_list - Version history
+8. crate_downloads_get - Download statistics
+9. crate_dependencies_list - Dependencies
+10. crate_dependents_list - Reverse dependencies

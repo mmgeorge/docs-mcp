@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "docs-mcp": {
+      "command": "cargo",
+      "args": ["run", "--release"]
+    }
+  }
+}
+
