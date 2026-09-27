@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python3:*)",
-      "mcp__docs-mcp__crate_get",
-      "mcp__docs-mcp__crate_list"
-    ]
-  }
-}
