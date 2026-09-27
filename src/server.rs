@@ -4,7 +4,6 @@ use rmcp::{
     ErrorData as McpError,
     ServerHandler,
     handler::server::{
-        router::tool::ToolRouter,
         wrapper::Parameters,
     },
     model::*,
@@ -29,17 +28,13 @@ use crate::tools::{
 
 #[derive(Clone)]
 pub struct DocsMcpServer {
-    tool_router: ToolRouter<DocsMcpServer>,
     state: Arc<AppState>,
 }
 
 #[tool_router]
 impl DocsMcpServer {
     pub fn new_with_state(state: Arc<AppState>) -> Self {
-        Self {
-            tool_router: Self::tool_router(),
-            state,
-        }
+        Self { state }
     }
 
     #[tool(description = "Search crates.io by keyword, category, or free-text query. Returns crate summaries ranked by relevance, download count, or recency. Entry point for crate discovery when you don't have a crate name yet.")]
@@ -141,21 +136,14 @@ impl DocsMcpServer {
 
 #[tool_handler]
 impl ServerHandler for DocsMcpServer {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            protocol_version: ProtocolVersion::V_2024_11_05,
-            capabilities: ServerCapabilities::builder()
-                .enable_tools()
-                .build(),
-            server_info: Implementation {
-                name: "docs-mcp".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                title: None,
-                description: Some("Rust crate documentation MCP server".to_string()),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+            .with_protocol_version(ProtocolVersion::V_2024_11_05)
+            .with_server_info(
+                Implementation::new("docs-mcp", env!("CARGO_PKG_VERSION"))
+                    .with_description("Rust crate documentation MCP server"),
+            )
+            .with_instructions(
                 "This server provides accurate, up-to-date access to the Rust crate ecosystem.\n\
                 \n\
                 DISCOVERY WORKFLOW: crate_list → crate_get → crate_readme_get\n\
@@ -169,8 +157,7 @@ impl ServerHandler for DocsMcpServer {
                 - crate_item_get: full item details when you have the exact fully-qualified path\n\
                 - crate_impls_list: requires trait_path OR type_path (use crate_item_list to find names)\n\
                 \n\
-                All tools default to the latest stable version when version is not specified.".to_string()
-            ),
-        }
+                All tools default to the latest stable version when version is not specified."
+            )
     }
 }

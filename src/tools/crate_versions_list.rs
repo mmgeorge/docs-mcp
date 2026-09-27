@@ -1,4 +1,4 @@
-use rmcp::{ErrorData, model::{CallToolResult, Content}};
+use rmcp::{ErrorData, model::{CallToolResult, ContentBlock}};
 use serde::{Deserialize, Serialize};
 use rmcp::schemars::{self, JsonSchema};
 use serde_json::json;
@@ -97,5 +97,5 @@ pub async fn execute(state: &AppState, params: CrateVersionsListParams) -> Resul
 
     let json = serde_json::to_string_pretty(&output)
         .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
-    Ok(CallToolResult::success(vec![Content::text(json)]))
+    Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
 }

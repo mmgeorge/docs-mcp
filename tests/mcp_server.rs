@@ -8,8 +8,8 @@ use rmcp::{
     ServiceExt,
     handler::client::ClientHandler,
     model::{
-        CallToolRequestParams, CallToolResult, ClientCapabilities, ClientInfo,
-        Implementation, ProtocolVersion,
+        CallToolRequestParams, CallToolResult, ClientCapabilities, ClientConfig,
+        Implementation,
     },
     service::{serve_client, Peer, RunningService, RoleClient},
 };
@@ -20,20 +20,11 @@ use serde_json::Value;
 struct TestClient;
 
 impl ClientHandler for TestClient {
-    fn get_info(&self) -> ClientInfo {
-        ClientInfo {
-            meta: None,
-            protocol_version: ProtocolVersion::default(),
-            capabilities: ClientCapabilities::default(),
-            client_info: Implementation {
-                name: "test-client".to_string(),
-                title: None,
-                version: "0.0.0".to_string(),
-                description: None,
-                icons: None,
-                website_url: None,
-            },
-        }
+    fn get_info(&self) -> ClientConfig {
+        ClientConfig::new(
+            ClientCapabilities::default(),
+            Implementation::new("test-client", "0.0.0"),
+        )
     }
 }
 
@@ -54,12 +45,9 @@ async fn connect() -> RunningService<RoleClient, TestClient> {
 }
 
 fn params(name: &'static str, args: Value) -> CallToolRequestParams {
-    CallToolRequestParams {
-        meta: None,
-        name: std::borrow::Cow::Borrowed(name),
-        arguments: args.as_object().cloned(),
-        task: None,
-    }
+    let mut request = CallToolRequestParams::new(name);
+    request.arguments = args.as_object().cloned();
+    request
 }
 
 async fn call(peer: &Peer<RoleClient>, tool: &'static str, args: Value) -> Value {

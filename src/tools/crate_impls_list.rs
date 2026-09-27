@@ -1,4 +1,4 @@
-use rmcp::{ErrorData, model::{CallToolResult, Content}};
+use rmcp::{ErrorData, model::{CallToolResult, ContentBlock}};
 use serde::Deserialize;
 use rmcp::schemars::{self, JsonSchema};
 use serde_json::json;
@@ -115,7 +115,7 @@ pub async fn execute(state: &AppState, params: CrateImplsListParams) -> Result<C
         });
         let json = serde_json::to_string_pretty(&output)
             .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
-        return Ok(CallToolResult::success(vec![Content::text(json)]));
+        return Ok(CallToolResult::success(vec![ContentBlock::text(json)]));
     }
 
     // type_path branch: find all traits this type implements.
@@ -219,5 +219,5 @@ pub async fn execute(state: &AppState, params: CrateImplsListParams) -> Result<C
     });
     let json = serde_json::to_string_pretty(&output)
         .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
-    Ok(CallToolResult::success(vec![Content::text(json)]))
+    Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
 }

@@ -31,9 +31,32 @@ pub enum DocsError {
 }
 
 impl From<DocsError> for rmcp::ErrorData {
-    fn from(e: DocsError) -> Self {
-        rmcp::ErrorData::internal_error(e.to_string(), None)
+    fn from(error: DocsError) -> Self {
+        match error {
+            DocsError::DocsNotFound { .. } => {
+                rmcp::ErrorData::invalid_params(error.to_string(), None)
+            }
+            _ => rmcp::ErrorData::internal_error(error.to_string(), None),
+        }
     }
 }
 
 pub type Result<T> = std::result::Result<T, DocsError>;
+
+#[cfg(test)]
+mod tests {
+    use super::DocsError;
+    use rmcp::{ErrorData, model::ErrorCode};
+
+    #[test]
+    fn missing_docs_build_is_invalid_params() {
+        let error = DocsError::DocsNotFound {
+            name: "example".to_string(),
+            version: "1.0.0".to_string(),
+        };
+
+        let response = ErrorData::from(error);
+        assert_eq!(response.code, ErrorCode::INVALID_PARAMS);
+        assert!(response.message.contains("example 1.0.0"));
+    }
+}

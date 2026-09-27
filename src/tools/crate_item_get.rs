@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use rmcp::{ErrorData, model::{CallToolResult, Content}};
+use rmcp::{ErrorData, model::{CallToolResult, ContentBlock}};
 use serde::Deserialize;
 use rmcp::schemars::{self, JsonSchema};
 use serde_json::json;
@@ -38,7 +38,7 @@ pub async fn execute(state: &AppState, params: CrateItemGetParams) -> Result<Cal
         state.fetch_index(name)
     );
 
-    let doc = docs_result.map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+    let doc = docs_result.map_err(ErrorData::from)?;
     let index_lines = index_result.unwrap_or_default();
     let latest = find_latest_stable(&index_lines);
     let features = latest.map(|l| l.all_features()).unwrap_or_default();
@@ -177,7 +177,7 @@ pub async fn execute(state: &AppState, params: CrateItemGetParams) -> Result<Cal
     let json = serde_json::to_string_pretty(&output)
         .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
-    Ok(CallToolResult::success(vec![Content::text(json)]))
+    Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
 }
 
 /// Extract a numeric or string ID value as a String (v57 IDs are integers).

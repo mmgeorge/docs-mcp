@@ -1,4 +1,4 @@
-use rmcp::{ErrorData, model::{CallToolResult, Content}};
+use rmcp::{ErrorData, model::{CallToolResult, ContentBlock}};
 use serde::Deserialize;
 use rmcp::schemars::{self, JsonSchema};
 use serde_json::json;
@@ -38,7 +38,7 @@ pub async fn execute(state: &AppState, params: CrateDocsGetParams) -> Result<Cal
             // Fall back to README; features are still available from the sparse index.
             let client = crate::cratesio::CratesIoClient::new(&state.client, &state.cache);
             let readme = client.get_readme(name, &version).await
-                .unwrap_or_else(|_| "No documentation available".to_string());
+                .map_err(ErrorData::from)?;
             let output = json!({
                 "name": name,
                 "version": version,
@@ -49,7 +49,7 @@ pub async fn execute(state: &AppState, params: CrateDocsGetParams) -> Result<Cal
             });
             let json = serde_json::to_string_pretty(&output)
                 .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
-            return Ok(CallToolResult::success(vec![Content::text(json)]));
+            return Ok(CallToolResult::success(vec![ContentBlock::text(json)]));
         }
         Err(e) => return Err(ErrorData::internal_error(e.to_string(), None)),
     };
@@ -77,7 +77,7 @@ pub async fn execute(state: &AppState, params: CrateDocsGetParams) -> Result<Cal
     let json = serde_json::to_string_pretty(&output)
         .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
-    Ok(CallToolResult::success(vec![Content::text(json)]))
+    Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
 }
 
 fn serialize_item_summary(s: &ItemSummary) -> serde_json::Value {

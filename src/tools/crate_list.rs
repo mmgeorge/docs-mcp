@@ -1,5 +1,5 @@
 use rmcp::{ErrorData, model::CallToolResult};
-use rmcp::model::Content;
+use rmcp::model::ContentBlock;
 use serde::{Deserialize, Serialize};
 use rmcp::schemars::{self, JsonSchema};
 
@@ -72,5 +72,5 @@ pub async fn execute(state: &AppState, params: CrateListParams) -> Result<CallTo
     let json = serde_json::to_string_pretty(&output)
         .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
-    Ok(CallToolResult::success(vec![Content::text(json)]))
+    Ok(CallToolResult::success(vec![ContentBlock::text(json)]))
 }
